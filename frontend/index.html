@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lost & Found</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#app">Skip to content</a>
+    <header class="site-header">
+      <div class="nav-inner">
+        <a class="logo" href="#/" aria-label="Lost and Found home">
+          <span class="logo-mark" aria-hidden="true"></span>
+          Lost&amp;Found
+        </a>
+        <button
+          class="nav-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="site-nav"
+          id="nav-toggle"
+        >
+          Menu
+        </button>
+        <nav id="site-nav" class="site-nav" aria-label="Primary">
+          <a href="#/">Home</a>
+          <a href="#/lost">Lost Items</a>
+          <a href="#/found">Found Items</a>
+          <a href="#/report">Report Item</a>
+          <a href="#/about">About</a>
+          <span id="nav-auth"></span>
+        </nav>
+      </div>
+    </header>
+    <main id="app"></main>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="modal" class="modal" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h2 id="modal-title"></h2>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+    <script src="userplatform.js"></script>
+    <script src="/script.js"></script>
+    <script src="sub-security.js"></script>
+  </body>
+</html>
