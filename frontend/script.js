@@ -868,6 +868,27 @@ function openModal(title, html) {
   }
 }
 
+/** Mobile-only person detail dialog (students / employees / sub-security). Desktop UI unchanged. */
+function openPersonDetailModal(opts) {
+  const rows = Array.isArray(opts && opts.rows) ? opts.rows : [];
+  const stack = rows
+    .map((r, i) => {
+      const label = escapeHtml(String((r && r.label) || ""));
+      const value = escapeHtml(String((r && r.value) != null ? r.value : "—"));
+      const sep = i < rows.length - 1 ? '<div class="person-detail-sep" aria-hidden="true"></div>' : "";
+      return `<div class="person-detail-row"><div class="person-detail-label">${label}</div><div class="person-detail-value">${value}</div></div>${sep}`;
+    })
+    .join("");
+  const actions = (opts && opts.actionsHtml) || "";
+  openModal(
+    String((opts && opts.title) || "Details"),
+    `<div class="person-detail-stack">${stack}</div>${actions ? `<div class="person-detail-actions mt">${actions}</div>` : ""}`
+  );
+  if (typeof window.__bindSecurityPeopleActions === "function") {
+    window.__bindSecurityPeopleActions(document.getElementById("modal-body"));
+  }
+}
+
 function confirmAction(title, message) {
   return new Promise((resolve) => {
     openModal(
@@ -999,6 +1020,29 @@ function publicBrowseItem(item) {
   `;
 }
 
+/** Compact mobile card: title + type tag + small image (desktop uses tables / full rows). */
+function mobileCompactItemCard(item, href, typeLabel) {
+  const id = item && (item._id || item.id);
+  const title = (item && item.title) || "Untitled item";
+  const label = typeLabel || (item && item.type === "found" ? "Found" : "Lost");
+  const isLost = String(label).toLowerCase() === "lost";
+  return `
+    <a class="public-item-row mobile-compact-item" href="${escapeHtml(href || ("#/item/" + id))}">
+      <div class="public-item-main">
+        <div class="public-item-title-line">
+          <h2>${escapeHtml(title)}</h2>
+          <span class="pill ${isLost ? "type-lost" : ""}">${escapeHtml(label)}</span>
+        </div>
+      </div>
+      <div class="public-item-thumb">
+        ${item && item.image
+          ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy" />`
+          : `<span aria-hidden="true">${escapeHtml(String(title).slice(0, 1).toUpperCase())}</span>`}
+      </div>
+    </a>
+  `;
+}
+
 function heroTicketMarkup(item) {
   if (!item) {
     return `
@@ -1095,11 +1139,59 @@ function renderNav() {
   if (state.user) {
     // After login: only Dashboard · Report · Profile & Settings · Logout
     const dashHref = getDashboardRoute(state.user);
+    const role = getEffectiveRole(state.user);
+
+    // Mobile-only: the hamburger menu also lists every section from the
+    // current dashboard (same links the in-page tab bar already uses),
+    // so everything is reachable without the page's own tab bar. This
+    // is purely additional navigation — same hrefs, same router, same
+    // pages. Hidden on desktop via .nav-dash-extra (see style.css).
+    let extraTabs = [];
+
+    if (role === "security_head") {
+      extraTabs = [
+        ["Overview", "#/security-head/overview"],
+        ["All Lost Items", "#/security-head/lost-items"],
+        ["All Found Items", "#/security-head/found-items"],
+        ["Item Verifications", "#/security-head/verifications"],
+        ["Add Securities", "#/security-head/sub-security?add=1"],
+        ["Manage Securities", "#/security-head/sub-security"],
+        ["Manage Students", "#/security-head/users"],
+        ["Manage Employees", "#/security-head/claims"],
+      ];
+    } else if (role === "sub_security") {
+      extraTabs = [
+        ["Overview", "#/sub-security/overview"],
+        ["All Lost Items", "#/sub-security/lost-items"],
+        ["All Found Items", "#/sub-security/found-items"],
+        ["Item Verifications", "#/sub-security/verifications"],
+        ["Claims & Messages", "#/sub-security/submitted-claims"],
+      ];
+    } else {
+      // Regular user mobile hamburger sections
+      extraTabs = [
+        ["Overview", "#/dashboard/overview"],
+        ["My Lost Reports", "#/dashboard/lost"],
+        ["My Found Reports", "#/dashboard/found"],
+        ["My Claims", "#/dashboard/claims"],
+        ["Browse Lost Items", "#/lost"],
+        ["Browse Found Items", "#/found"],
+      ];
+    }
+
+    const extraTabsHtml = extraTabs
+      .map(
+        ([label, href]) =>
+          `<a class="nav-dash-extra" href="${href}">${escapeHtml(label)}</a>`
+      )
+      .join("");
 
     nav.innerHTML = `
       <a href="${dashHref}">Dashboard</a>
       <a href="#/report">Report</a>
       <a href="#/profile">Profile &amp; Settings</a>
+      <span class="nav-dash-extra nav-dash-extra-label" aria-hidden="true">Dashboard sections</span>
+      ${extraTabsHtml}
     `;
   } else {
     // Before login: public navigation
@@ -1962,22 +2054,39 @@ async function renderBrowse(type) {
           }
           @media (max-width:760px){
             .public-item-row{
-              grid-template-columns:58px minmax(0,1fr);
-              gap:13px;
-              padding:12px;
+              grid-template-columns:minmax(0,1fr) 48px !important;
+              grid-template-areas:"main thumb" "side side" !important;
+              gap:10px !important;
+              padding:14px 18px 14px 16px !important;
+              overflow:hidden !important;
+              box-sizing:border-box !important;
             }
+            .public-item-main{ grid-area:main !important; min-width:0 !important; }
             .public-item-thumb{
-              width:58px;
-              height:58px;
-              border-radius:12px;
+              grid-area:thumb !important;
+              width:48px !important;
+              height:48px !important;
+              border-radius:10px !important;
+              border:1.5px solid #111 !important;
+              box-sizing:border-box !important;
+              margin:0 !important;
+              justify-self:end !important;
+              overflow:hidden !important;
+            }
+            .public-item-thumb img{
+              width:100% !important;
+              height:100% !important;
+              object-fit:cover !important;
+              display:block !important;
             }
             .public-item-title-line h2{
-              font-size:16px;
+              font-size:16px !important;
+              order:-1 !important;
             }
             .public-item-side{
-              grid-column:2;
-              padding-left:0;
-              justify-content:space-between;
+              grid-area:side !important;
+              padding-left:0 !important;
+              justify-content:stretch !important;
             }
             .public-item-arrow{
               width:30px;
@@ -4045,6 +4154,14 @@ async function renderItemVerificationsPage(view) {
         .verification-filters{display:flex;gap:8px;flex-wrap:wrap;}
         .verification-filter{height:42px;padding:0 14px;border:1px solid #ddd;border-radius:12px;background:#fff;color:#555;font-weight:700;cursor:pointer;}
         .verification-filter.active{background:#111;color:#fff;border-color:#111;}
+        .verification-filter-select{display:none;width:100%;height:48px;border:1px solid #ddd;border-radius:14px;padding:0 14px;box-sizing:border-box;background:#fff;font:inherit;font-weight:700;color:#111;outline:none;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23111' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;}
+        .verification-filter-select:focus{border-color:#111;box-shadow:0 0 0 3px rgba(0,0,0,.06);}
+        @media(max-width:760px){
+          .verification-toolbar{flex-direction:column;align-items:stretch;}
+          .verification-search{flex:none;width:100%;min-width:0;}
+          .verification-filters{display:none!important;}
+          .verification-filter-select{display:block!important;}
+        }
         .verification-list{display:grid;gap:12px;}
         .verification-card{border:1px solid #e7e7e7;border-radius:20px;background:#fff;overflow:hidden;box-shadow:0 8px 26px rgba(0,0,0,.04);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
         .verification-card:hover{transform:translateY(-1px);box-shadow:0 14px 34px rgba(0,0,0,.07);border-color:#d9d9d9;}
@@ -4097,6 +4214,7 @@ async function renderItemVerificationsPage(view) {
       <section>
         <div class="verification-toolbar">
           <input id="verification-search" class="verification-search" type="search" placeholder="Search by item, person, location or category…" autocomplete="off" />
+          <select id="verification-filter-select" class="verification-filter-select" aria-label="Filter verifications"></select>
           <div class="verification-filters" id="verification-filters"></div>
         </div>
         <div id="verification-list" class="verification-list">
@@ -4165,6 +4283,12 @@ async function renderItemVerificationsPage(view) {
     $("#verification-filters").innerHTML = filterDefs.map(([id, label]) => `
       <button type="button" class="verification-filter ${id === "all" ? "active" : ""}" data-verification-filter="${id}">${label}</button>
     `).join("");
+    const filterSelectEl = $("#verification-filter-select");
+    if (filterSelectEl) {
+      filterSelectEl.innerHTML = filterDefs.map(([id, label]) =>
+        `<option value="${id}"${id === "all" ? " selected" : ""}>${label}</option>`
+      ).join("");
+    }
 
     const statusBadge = (item) => {
       const key = getStatusKey(item);
@@ -4253,9 +4377,21 @@ async function renderItemVerificationsPage(view) {
       button.addEventListener("click", () => {
         activeFilter = button.getAttribute("data-verification-filter") || "all";
         document.querySelectorAll("[data-verification-filter]").forEach((btn) => btn.classList.toggle("active", btn === button));
+        const sel = $("#verification-filter-select");
+        if (sel) sel.value = activeFilter;
         renderList();
       });
     });
+    const verificationFilterSelect = $("#verification-filter-select");
+    if (verificationFilterSelect) {
+      verificationFilterSelect.addEventListener("change", () => {
+        activeFilter = verificationFilterSelect.value || "all";
+        document.querySelectorAll("[data-verification-filter]").forEach((btn) => {
+          btn.classList.toggle("active", (btn.getAttribute("data-verification-filter") || "") === activeFilter);
+        });
+        renderList();
+      });
+    }
 
     renderList();
   } catch (err) {
@@ -4761,7 +4897,9 @@ async function renderDashboard(tab) {
 
         </nav>
 
-        ${body}
+        <div class="${current === "overview" ? "sec-dash-content" : "sec-dash-content sec-dash-content-card"}">
+          ${body}
+        </div>
 
       </div>
     `;
@@ -5067,7 +5205,7 @@ async function renderSecurityHead(tab) {
 
         ${subRes.users.length
           ? `
-              <div class="table-wrap panel">
+              <div class="table-wrap panel desktop-people-table">
 
                 <table>
 
@@ -5155,6 +5293,21 @@ async function renderSecurityHead(tab) {
                 </table>
 
               </div>
+              <div class="mobile-people-list">
+                ${subRes.users.map((u) => {
+                  const isDisabled = u.status === "disabled" || !u.active;
+                  const id = u.id || u._id;
+                  return `
+                    <button type="button" class="mobile-person-card" data-mobile-person="sub"
+                      data-id="${escapeHtml(String(id))}"
+                      data-name="${escapeHtml(u.name || "—")}"
+                      data-email="${escapeHtml(u.email || "—")}"
+                      data-status="${isDisabled ? "Disabled" : "Active"}"
+                      data-disabled="${isDisabled ? "1" : "0"}">
+                      ${escapeHtml(u.name || "—")}
+                    </button>`;
+                }).join("")}
+              </div>
             `
           : `
               <div class="empty">
@@ -5177,7 +5330,7 @@ async function renderSecurityHead(tab) {
         </div>
         ${rows.length
           ? `
-          <div class="table-wrap panel">
+          <div class="table-wrap panel desktop-items-table">
             <table>
               <thead>
                 <tr>
@@ -5215,6 +5368,9 @@ async function renderSecurityHead(tab) {
               </tbody>
             </table>
           </div>
+          <div class="mobile-item-cards">
+            ${rows.map((item) => mobileCompactItemCard(item, "#/security-head/item/" + (item.id || item._id), "Lost")).join("")}
+          </div>
         `
           : `<div class="empty">No lost items found.</div>`
         }
@@ -5232,7 +5388,7 @@ async function renderSecurityHead(tab) {
         </div>
         ${rows.length
           ? `
-          <div class="table-wrap panel">
+          <div class="table-wrap panel desktop-items-table">
             <table>
               <thead>
                 <tr>
@@ -5281,6 +5437,9 @@ async function renderSecurityHead(tab) {
             .join("")}
               </tbody>
             </table>
+          </div>
+          <div class="mobile-item-cards">
+            ${rows.map((item) => mobileCompactItemCard(item, "#/security-head/item/" + (item.id || item._id), "Found")).join("")}
           </div>
         `
           : `<div class="empty">No found items found.</div>`
@@ -5362,7 +5521,7 @@ async function renderSecurityHead(tab) {
           </div>
         </div>
 
-        <div class="table-wrap panel security-people-table">
+        <div class="table-wrap panel security-people-table desktop-people-table">
           <table>
             <thead>
               <tr>
@@ -5401,6 +5560,21 @@ async function renderSecurityHead(tab) {
             </tbody>
           </table>
         </div>
+        <div class="mobile-people-list">
+          ${(employees || []).map((u) => {
+            const id = u.id || u._id;
+            const isDisabled = u.status === "disabled" || !u.active;
+            return `
+              <button type="button" class="mobile-person-card" data-mobile-person="employee"
+                data-id="${escapeHtml(String(id))}"
+                data-name="${escapeHtml(u.name || "—")}"
+                data-email="${escapeHtml(u.email || "—")}"
+                data-status="${isDisabled ? "Disabled" : "Active"}"
+                data-disabled="${isDisabled ? "1" : "0"}">
+                ${escapeHtml(u.name || "—")}
+              </button>`;
+          }).join("")}
+        </div>
       `;
     } else if (
       current === "users"
@@ -5419,7 +5593,7 @@ async function renderSecurityHead(tab) {
           </div>
         </div>
 
-        <div class="table-wrap panel security-people-table">
+        <div class="table-wrap panel security-people-table desktop-people-table">
           <table>
             <thead>
               <tr>
@@ -5459,6 +5633,24 @@ async function renderSecurityHead(tab) {
           : `<tr><td colspan="5"><div class="empty">No registered students found.</div></td></tr>`}
             </tbody>
           </table>
+        </div>
+        <div class="mobile-people-list">
+          ${(students || []).map((u) => {
+            const id = u.id || u._id;
+            const isDisabled = u.status === "disabled" || !u.active;
+            const emailLocal = String(u.email || "").split("@")[0];
+            const enrollment = u.enrollmentNumber || u.enrollment || u.studentId || emailLocal || "—";
+            return `
+              <button type="button" class="mobile-person-card" data-mobile-person="student"
+                data-id="${escapeHtml(String(id))}"
+                data-name="${escapeHtml(u.name || "—")}"
+                data-email="${escapeHtml(u.email || "—")}"
+                data-enrollment="${escapeHtml(String(enrollment))}"
+                data-status="${isDisabled ? "Disabled" : "Active"}"
+                data-disabled="${isDisabled ? "1" : "0"}">
+                ${escapeHtml(u.name || "—")}
+              </button>`;
+          }).join("")}
         </div>
       `;
     } else if (
@@ -5583,7 +5775,9 @@ async function renderSecurityHead(tab) {
         .join("")}
         </nav>
 
-        ${body}
+        <div class="${current === "overview" ? "sec-dash-content" : "sec-dash-content sec-dash-content-card"}">
+          ${body}
+        </div>
 
       </div>
 
@@ -5594,7 +5788,7 @@ async function renderSecurityHead(tab) {
       $("#sec-open-add-modal");
 
     if (addBtn) {
-      addBtn.onclick = () => {
+      const openAddSecuritiesModal = () => {
         openModal(
           "Add Sub Security",
           `
@@ -5717,7 +5911,22 @@ async function renderSecurityHead(tab) {
                 err.message;
             }
           };
-      }
+      };
+
+      addBtn.onclick = openAddSecuritiesModal;
+
+      // Mobile hamburger "Add Securities" uses ?add=1 to open this form
+      try {
+        const addQ = String(((parseRoute().query) || {}).add || "");
+        if (addQ === "1") {
+          setTimeout(() => {
+            openAddSecuritiesModal();
+            if (String(location.hash || "").includes("add=1")) {
+              history.replaceState(null, "", "#/security-head/sub-security");
+            }
+          }, 50);
+        }
+      } catch (_e) {}
     }
 
     document
@@ -5989,6 +6198,128 @@ async function renderSecurityHead(tab) {
           }
         };
       });
+
+    // Shared binder so person-detail modal action buttons work (mobile)
+    window.__bindSecurityPeopleActions = function (root) {
+      const scope = root || document;
+      scope.querySelectorAll("[data-sub-toggle]").forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute("data-sub-toggle");
+          const nextStatus = btn.getAttribute("data-next");
+          try {
+            await api(`/api/users/sub-security/${id}/status`, {
+              method: "PUT",
+              body: { status: nextStatus },
+            });
+            toast(`Sub Security ${nextStatus === "active" ? "enabled" : "disabled"}.`);
+            closeModal();
+            renderSecurityHead("sub-security");
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+      scope.querySelectorAll("[data-sub-delete]").forEach((btn) => {
+        btn.onclick = async () => {
+          const id = btn.getAttribute("data-sub-delete");
+          const ok = await confirmAction(
+            "Remove Sub Security",
+            "Are you sure you want to permanently remove this Sub Security account?"
+          );
+          if (!ok) return;
+          try {
+            await api(`/api/users/sub-security/${id}`, { method: "DELETE" });
+            toast("Sub Security account removed.");
+            closeModal();
+            renderSecurityHead("sub-security");
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+      scope.querySelectorAll("[data-user-toggle]").forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            const active = btn.getAttribute("data-value") === "true";
+            await api(`/api/users/${btn.getAttribute("data-user-toggle")}`, {
+              method: "PUT",
+              body: { active },
+            });
+            toast("User status updated.");
+            closeModal();
+            renderSecurityHead(current === "claims" ? "claims" : "users");
+          } catch (err) {
+            toast(err.message);
+          }
+        };
+      });
+      scope.querySelectorAll("[data-user-delete]").forEach((btn) => {
+        btn.onclick = async () => {
+          const id = String(btn.getAttribute("data-user-delete") || "").trim();
+          if (!id || id === "undefined" || id === "null") {
+            toast("Unable to delete: missing user id.");
+            return;
+          }
+          const ok = await confirmAction(
+            "Delete account",
+            "Permanently delete this user/employee account? This cannot be undone."
+          );
+          if (!ok) return;
+          try {
+            try {
+              await api(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+            } catch (e1) {
+              await api(`/api/users/sub-security/${encodeURIComponent(id)}`, { method: "DELETE" });
+            }
+            toast("Account deleted.");
+            closeModal();
+            renderSecurityHead(current === "sub-security" ? "sub-security" : current);
+          } catch (err) {
+            toast(err.message || "Unable to delete account.");
+          }
+        };
+      });
+    };
+
+    // Mobile: name-only cards → detail dialog
+    document.querySelectorAll("[data-mobile-person]").forEach((card) => {
+      card.onclick = () => {
+        const kind = card.getAttribute("data-mobile-person");
+        const id = card.getAttribute("data-id");
+        const name = card.getAttribute("data-name") || "—";
+        const email = card.getAttribute("data-email") || "—";
+        const status = card.getAttribute("data-status") || "—";
+        const isDisabled = card.getAttribute("data-disabled") === "1";
+        const enrollment = card.getAttribute("data-enrollment") || "";
+        let rows = [{ label: "Name", value: name }];
+        let actionsHtml = "";
+        if (kind === "student") {
+          rows.push({ label: "Enrollment", value: enrollment || "—" });
+          rows.push({ label: "Email", value: email });
+          rows.push({ label: "Role", value: "Student" });
+          rows.push({ label: "Status", value: status });
+          actionsHtml = `
+            <button class="btn secondary" type="button" data-user-toggle="${id}" data-value="${isDisabled ? "true" : "false"}">${isDisabled ? "Enable" : "Disable"}</button>
+            <button class="btn secondary" type="button" data-user-delete="${id}">Delete</button>`;
+        } else if (kind === "employee") {
+          rows.push({ label: "Email", value: email });
+          rows.push({ label: "Role", value: "Employee" });
+          rows.push({ label: "Status", value: status });
+          actionsHtml = `
+            <button class="btn secondary" type="button" data-user-toggle="${id}" data-value="${isDisabled ? "true" : "false"}">${isDisabled ? "Enable" : "Disable"}</button>
+            <button class="btn secondary" type="button" data-user-delete="${id}">Delete</button>`;
+        } else {
+          // sub security
+          rows.push({ label: "Email", value: email });
+          rows.push({ label: "Role", value: "Sub Security" });
+          rows.push({ label: "Status", value: status });
+          actionsHtml = `
+            <button class="btn secondary" type="button" data-sub-toggle="${id}" data-next="${isDisabled ? "active" : "disabled"}">${isDisabled ? "Enable" : "Disable"}</button>
+            <button class="btn ghost" type="button" data-sub-delete="${id}">Remove</button>`;
+        }
+        openPersonDetailModal({ title: name, rows, actionsHtml });
+      };
+    });
 
     const logout =
       $("#logout-btn");
@@ -8398,6 +8729,64 @@ $("#nav-toggle").addEventListener(
     );
   }
 );
+
+
+function initPasswordToggles() {
+  const eyeSvg = `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+      <path class="pw-eye-slash" d="M4 4l16 16"></path>
+    </svg>
+  `;
+
+  const enhance = (root) => {
+    const scope = root || document;
+    scope.querySelectorAll('input[type="password"]').forEach((input) => {
+      if (input.dataset.pwEnhanced === "1") return;
+      if (input.closest(".pw-field-wrap")) {
+        input.dataset.pwEnhanced = "1";
+        return;
+      }
+      input.dataset.pwEnhanced = "1";
+      const wrap = document.createElement("div");
+      wrap.className = "pw-field-wrap";
+      const parent = input.parentNode;
+      parent.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pw-toggle";
+      btn.setAttribute("aria-label", "Show password");
+      btn.innerHTML = eyeSvg;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.classList.toggle("is-open", show);
+        btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      });
+      wrap.appendChild(btn);
+    });
+  };
+
+  enhance(document);
+  if (!window.__pwToggleObserver) {
+    window.__pwToggleObserver = new MutationObserver(() => {
+      enhance(document.getElementById("app"));
+      enhance(document.getElementById("modal-body"));
+      enhance(document);
+    });
+    window.__pwToggleObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+  }
+}
+
+
+initPasswordToggles();
 
 applyFinalVisualOverrides();
 

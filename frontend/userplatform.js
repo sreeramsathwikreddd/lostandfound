@@ -258,27 +258,34 @@ window.renderUserPlatform = async function renderUserPlatform(tab) {
           }
           @media (max-width:760px){
             .public-item-row{
-              grid-template-columns:58px minmax(0,1fr);
-              gap:13px;
-              padding:12px;
+              grid-template-columns:minmax(0,1fr) 48px !important;
+              grid-template-areas:"main thumb" "side side" !important;
+              gap:10px !important;
+              padding:14px 18px 14px 16px !important;
+              overflow:hidden !important;
+              box-sizing:border-box !important;
             }
+            .public-item-main{ grid-area:main !important; min-width:0 !important; }
             .public-item-thumb{
-              width:58px;
-              height:58px;
-              border-radius:12px;
+              grid-area:thumb !important;
+              width:48px !important;
+              height:48px !important;
+              border-radius:10px !important;
+              border:1.5px solid #111 !important;
+              box-sizing:border-box !important;
+              margin:0 !important;
+              justify-self:end !important;
+              overflow:hidden !important;
             }
-            .public-item-title-line h2{
-              font-size:16px;
+            .public-item-thumb img{
+              width:100% !important;
+              height:100% !important;
+              object-fit:cover !important;
+              display:block !important;
             }
-            .public-item-side{
-              grid-column:2;
-              padding-left:0;
-              justify-content:space-between;
-            }
-            .public-item-arrow{
-              width:30px;
-              height:30px;
-            }
+            .public-item-title-line h2{ font-size:16px !important; order:-1 !important; }
+            .public-item-side{ grid-area:side !important; padding-left:0 !important; }
+            .public-item-arrow{ display:none !important; }
           }
         </style>
     `;
@@ -293,18 +300,19 @@ window.renderUserPlatform = async function renderUserPlatform(tab) {
       const location = item.location || "Location not specified";
       const category = item.category || "Other";
       const removed = item.status === "removed";
+      const href = `#/item/${escapeHtml(String(id))}`;
       return `
-        <div class="public-item-row" style="cursor:default;">
-          <a class="public-item-thumb" href="#/item/${escapeHtml(String(id))}" style="text-decoration:none;color:inherit;">
+        <div class="public-item-row my-report-row" data-href="${href}" role="link" tabindex="0">
+          <div class="public-item-thumb">
             ${item.image
               ? `<img src="${escapeHtml(item.image)}" alt="" loading="lazy" />`
               : `<span aria-hidden="true">${escapeHtml((item.title || "?").slice(0, 1).toUpperCase())}</span>`}
-          </a>
-          <a class="public-item-main" href="#/item/${escapeHtml(String(id))}" style="text-decoration:none;color:inherit;min-width:0;">
+          </div>
+          <div class="public-item-main">
             <div class="public-item-title-line">
+              <h2>${escapeHtml(item.title || "Untitled item")}</h2>
               <span class="pill ${item.type === "lost" ? "type-lost" : ""}">${escapeHtml(typeLabel)}</span>
               ${removed ? `<span class="pill" style="border-color:#999;color:#666;">Removed</span>` : ""}
-              <h2>${escapeHtml(item.title || "Untitled item")}</h2>
             </div>
             <div class="public-item-meta">
               <span>${escapeHtml(category)}</span>
@@ -315,12 +323,12 @@ window.renderUserPlatform = async function renderUserPlatform(tab) {
               <span class="public-item-dot" aria-hidden="true">·</span>
               <span>${escapeHtml(status)}</span>
             </div>
-          </a>
-          <div class="public-item-side" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <a class="public-item-status" href="#/item/${escapeHtml(String(id))}" style="text-decoration:none;">Open</a>
+          </div>
+          <div class="public-item-side my-report-actions">
+            <a class="btn report-action-open" href="${href}">Open</a>
             ${removed
-              ? `<button type="button" class="btn ghost" data-perm-delete="${escapeHtml(String(id))}" style="border-radius:999px;padding:8px 12px;font-size:12px;">Delete</button>`
-              : `<button type="button" class="btn ghost" data-soft-delete="${escapeHtml(String(id))}" style="border-radius:999px;padding:8px 12px;font-size:12px;">Remove</button>`}
+              ? `<button type="button" class="btn report-action-remove" data-perm-delete="${escapeHtml(String(id))}">Delete</button>`
+              : `<button type="button" class="btn report-action-remove" data-soft-delete="${escapeHtml(String(id))}">Remove</button>`}
           </div>
         </div>
       `;
@@ -559,6 +567,25 @@ window.renderUserPlatform = async function renderUserPlatform(tab) {
         try {
           // Hide forever from My Reports (works without hard-delete permission issues)
           await api(`/api/items/${encodeURIComponent(id)}/owner-hide`, { method: "POST", body: {} });
+
+    // Mobile/desktop: whole my-report card opens item (except action buttons)
+    document.querySelectorAll(".my-report-row").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        if (e.target.closest("[data-soft-delete], [data-perm-delete], .report-action-remove, a.report-action-open")) {
+          return;
+        }
+        const href = row.getAttribute("data-href");
+        if (href) location.hash = href;
+      });
+      row.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const href = row.getAttribute("data-href");
+          if (href) location.hash = href;
+        }
+      });
+    });
+
           toast("Report permanently deleted.");
           renderUserPlatform(current);
         } catch (err) {

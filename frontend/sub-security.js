@@ -291,7 +291,7 @@
 
           ${nav(current)}
 
-          <main class="sub-security-content">
+          <main class="sub-security-content ${current === "overview" ? "" : "sec-dash-content-card"}">
             ${body}
           </main>
         </div>
